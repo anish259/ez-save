@@ -190,32 +190,32 @@ def download():
                     print("FFmpeg merge timed out after 600 seconds")
                     raise RuntimeError("FFmpeg merge timeout")
         
-        def generate():
-            try:
-                with open(output_path, 'rb') as f:
-                    while chunk := f.read(8192):
-                        yield chunk
-            finally:
-                os.unlink(video_path)
-                os.unlink(audio_path)
-                os.unlink(output_path)
+            def generate():
+                try:
+                    with open(output_path, 'rb') as f:
+                        while chunk := f.read(8192):
+                            yield chunk
+                finally:
+                    os.unlink(video_path)
+                    os.unlink(audio_path)
+                    os.unlink(output_path)
+            
+            return Response(
+                generate(),
+                mimetype='video/mp4',
+                headers={'Content-Disposition': f'attachment; filename="{filename}"'}
+            )
         
-        return Response(
-            generate(),
-            mimetype='video/mp4',
-            headers={'Content-Disposition': f'attachment; filename="{filename}"'}
-        )
-    
-    else:
-        def generate():
-            for chunk in pytube_request.stream(stream.url):
-                yield chunk
-        
-        return Response(
-            generate(),
-            mimetype='video/mp4',
-            headers={'Content-Disposition': f'attachment; filename="{filename}"'}
-        )
+        else:
+            def generate():
+                for chunk in pytube_request.stream(stream.url):
+                    yield chunk
+            
+            return Response(
+                generate(),
+                mimetype='video/mp4',
+                headers={'Content-Disposition': f'attachment; filename="{filename}"'}
+            )
     except Exception as e:
         print(f"Download error: {str(e)}")
         return jsonify({'error': str(e)}), 500
