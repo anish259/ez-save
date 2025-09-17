@@ -26,75 +26,71 @@ def clean_youtube_url(url):
 
 @app.route('/')
 def index():
-    print("Serving index.html")
+    print("Serving index.html", file=sys.stderr)
     return render_template('index.html')
 
 @app.route('/get_formats', methods=['POST'])
 def get_formats():
     url = request.form.get('url')
-    print(f"Starting get_formats - URL: {url}")
+    print(f"Starting get_formats - URL: {url}", file=sys.stderr)
     if not url:
-        print("Error: No URL provided")
+        print("Error: No URL provided", file=sys.stderr)
         return jsonify({'error': 'No URL provided'}), 400
     
     url = clean_youtube_url(url)
-    print(f"Cleaned URL: {url}")
+    print(f"Cleaned URL: {url}", file=sys.stderr)
     
     max_retries = 3
     for attempt in range(max_retries):
         try:
-            print(f"Attempt {attempt + 1} to fetch YouTube data")
-            yt = YouTube(url, use_po_token=True)
-            print("YouTube object created successfully")
+            print(f"Attempt {attempt + 1} to fetch YouTube data", file=sys.stderr)
+            yt = YouTube(url, use_po_token=True, allow_oauth_cache=True)
+            print("YouTube object created successfully", file=sys.stderr)
             time.sleep(5)  # 5-second delay to avoid rate limiting
             
-            try:
-                formats = []
-                seen_resolutions = set()
-                
-                video_streams = yt.streams.filter(file_extension='mp4').order_by('resolution').desc()
-                print(f"Found {len(video_streams)} video streams")
-                for stream in video_streams:
-                    if stream.includes_video_track and stream.resolution and stream.resolution not in seen_resolutions:
-                        formats.append({
-                            'itag': stream.itag,
-                            'type': 'video',
-                            'resolution': stream.resolution,
-                            'fps': stream.fps if stream.fps else 'N/A',
-                            'size': f"{stream.filesize / (1024 * 1024):.2f} MB" if stream.filesize else "Unknown"
-                        })
-                        seen_resolutions.add(stream.resolution)
-                
-                audio_streams = yt.streams.filter(only_audio=True).order_by('abr').desc()
-                print(f"Found {len(audio_streams)} audio streams")
-                for stream in audio_streams:
+            formats = []
+            seen_resolutions = set()
+            
+            video_streams = yt.streams.filter(file_extension='mp4').order_by('resolution').desc()
+            print(f"Found {len(video_streams)} video streams", file=sys.stderr)
+            for stream in video_streams:
+                if stream.includes_video_track and stream.resolution and stream.resolution not in seen_resolutions:
                     formats.append({
                         'itag': stream.itag,
-                        'type': 'audio',
-                        'resolution': f"MP3 {stream.abr}kbps" if stream.abr else 'MP3 Audio',
-                        'fps': 'N/A',
+                        'type': 'video',
+                        'resolution': stream.resolution,
+                        'fps': stream.fps if stream.fps else 'N/A',
                         'size': f"{stream.filesize / (1024 * 1024):.2f} MB" if stream.filesize else "Unknown"
                     })
-                
-                print(f"Returning formats: {formats}")
-                return jsonify({'title': yt.title, 'formats': formats})
-            except Exception as stream_error:
-                print(f"Error processing streams: {str(stream_error)}")
-                raise
+                    seen_resolutions.add(stream.resolution)
+            
+            audio_streams = yt.streams.filter(only_audio=True).order_by('abr').desc()
+            print(f"Found {len(audio_streams)} audio streams", file=sys.stderr)
+            for stream in audio_streams:
+                formats.append({
+                    'itag': stream.itag,
+                    'type': 'audio',
+                    'resolution': f"MP3 {stream.abr}kbps" if stream.abr else 'MP3 Audio',
+                    'fps': 'N/A',
+                    'size': f"{stream.filesize / (1024 * 1024):.2f} MB" if stream.filesize else "Unknown"
+                })
+            
+            print(f"Returning formats: {formats}", file=sys.stderr)
+            return jsonify({'title': yt.title, 'formats': formats})
         except urllib.error.HTTPError as e:
             if e.code == 429 and attempt < max_retries - 1:
-                print(f"Rate limit hit (429) on attempt {attempt + 1}. Retrying in 10 seconds...")
-                time.sleep(10)
+                print(f"Rate limit hit (429) on attempt {attempt + 1}. Retrying in 15 seconds...", file=sys.stderr)
+                time.sleep(15)  # Increased retry delay
                 continue
-            print(f"HTTP Error in get_formats: {str(e)}")
+            print(f"HTTP Error in get_formats: {str(e)}", file=sys.stderr)
             return jsonify({'error': f'Failed to fetch video: {str(e)}'}), 400
         except (pytube_exceptions.ExtractError, pytube_exceptions.VideoUnavailable) as e:
-            print(f"pytube Error in get_formats: {str(e)}")
+            print(f"pytube Error in get_formats: {str(e)}", file=sys.stderr)
             return jsonify({'error': f'Failed to fetch video: {str(e)}'}), 400
         except Exception as e:
-            print(f"Unexpected error in get_formats: {str(e)}, Traceback: {str(sys.exc_info()[2])}")
+            print(f"Unexpected error in get_formats: {str(e)}, Traceback: {str(sys.exc_info()[2])}", file=sys.stderr)
             return jsonify({'error': str(e)}), 500
-    print("Max retries reached, giving up")
+    print("Max retries reached, giving up", file=sys.stderr)
     return jsonify({'error': 'Max retries reached, please try again later'}), 429
 
 @app.route('/download', methods=['POST'])
@@ -103,23 +99,23 @@ def download():
     itag = request.form.get('itag')
     download_type = request.form.get('type')
     
-    print(f"Starting download - URL: {url}, itag: {itag}, type: {download_type}")
+    print(f"Starting download - URL: {url}, itag: {itag}, type: {download_type}", file=sys.stderr)
     if not url or not itag:
-        print("Error: Missing parameters")
+        print("Error: Missing parameters", file=sys.stderr)
         return jsonify({'error': 'Missing parameters'}), 400
     
     url = clean_youtube_url(url)
-    print(f"Cleaned URL: {url}")
+    print(f"Cleaned URL: {url}", file=sys.stderr)
     
     max_retries = 3
     for attempt in range(max_retries):
         try:
-            print(f"Attempt {attempt + 1} to download")
-            yt = YouTube(url, use_po_token=True)
-            print("YouTube object created successfully")
+            print(f"Attempt {attempt + 1} to download", file=sys.stderr)
+            yt = YouTube(url, use_po_token=True, allow_oauth_cache=True)
+            print("YouTube object created successfully", file=sys.stderr)
             time.sleep(5)  # 5-second delay to avoid rate limiting
             stream = yt.streams.get_by_itag(int(itag))
-            print(f"Stream selected: itag={itag}, includes_audio={stream.includes_audio_track}")
+            print(f"Stream selected: itag={itag}, includes_audio={stream.includes_audio_track}", file=sys.stderr)
 
             ext = 'mp3' if download_type == 'audio' else 'mp4'
             filename = f"{yt.title.replace(' ', '_').replace('/', '_')}.{ext}"
@@ -140,7 +136,7 @@ def download():
                 ]
                 proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, bufsize=-1)
                 start_time = time.time()
-                print(f"Starting ffmpeg audio conversion for {filename}")
+                print(f"Starting ffmpeg audio conversion for {filename}", file=sys.stderr)
                 
                 def generate():
                     try:
@@ -152,12 +148,12 @@ def download():
                         proc.wait(timeout=600)
                         if proc.returncode != 0:
                             err = proc.stderr.read().decode('utf-8', errors='ignore')
-                            print(f"FFmpeg audio error: {err}")
+                            print(f"FFmpeg audio error: {err}", file=sys.stderr)
                             raise RuntimeError(f"FFmpeg error: {err}")
-                        print(f"FFmpeg audio conversion completed in {time.time() - start_time:.2f} seconds")
+                        print(f"FFmpeg audio conversion completed in {time.time() - start_time:.2f} seconds", file=sys.stderr)
                     except subprocess.TimeoutExpired:
                         proc.kill()
-                        print("FFmpeg audio conversion timed out")
+                        print("FFmpeg audio conversion timed out", file=sys.stderr)
                         raise RuntimeError("FFmpeg timeout")
                     finally:
                         proc.terminate()
@@ -196,14 +192,14 @@ def download():
                     ]
                     proc = subprocess.Popen(cmd, stderr=subprocess.PIPE, text=True, bufsize=1)
                     start_time = time.time()
-                    print(f"Starting ffmpeg merge for {filename}")
+                    print(f"Starting ffmpeg merge for {filename}", file=sys.stderr)
                     
                     def log_stderr():
                         while True:
                             line = proc.stderr.readline()
                             if not line:
                                 break
-                            print(f"FFmpeg progress: {line.strip()}")
+                            print(f"FFmpeg progress: {line.strip()}", file=sys.stderr)
                     
                     stderr_thread = threading.Thread(target=log_stderr)
                     stderr_thread.daemon = True
@@ -213,12 +209,12 @@ def download():
                         proc.wait(timeout=600)
                         if proc.returncode != 0:
                             err = proc.stderr.read()
-                            print(f"FFmpeg merge error: {err}")
+                            print(f"FFmpeg merge error: {err}", file=sys.stderr)
                             raise RuntimeError(f"FFmpeg error: {err}")
-                        print(f"FFmpeg merge completed in {time.time() - start_time:.2f} seconds")
+                        print(f"FFmpeg merge completed in {time.time() - start_time:.2f} seconds", file=sys.stderr)
                     except subprocess.TimeoutExpired:
                         proc.kill()
-                        print("FFmpeg merge timed out after 600 seconds")
+                        print("FFmpeg merge timed out after 600 seconds", file=sys.stderr)
                         raise RuntimeError("FFmpeg merge timeout")
             
                 def generate():
@@ -249,17 +245,17 @@ def download():
                 )
         except urllib.error.HTTPError as e:
             if e.code == 429 and attempt < max_retries - 1:
-                print(f"Rate limit hit (429) on attempt {attempt + 1}. Retrying in 10 seconds...")
-                time.sleep(10)
+                print(f"Rate limit hit (429) on attempt {attempt + 1}. Retrying in 15 seconds...", file=sys.stderr)
+                time.sleep(15)  # Increased retry delay
                 continue
-            print(f"HTTP Error in download: {str(e)}")
+            print(f"HTTP Error in download: {str(e)}", file=sys.stderr)
             return jsonify({'error': f'Failed to download video: {str(e)}'}), 400
         except Exception as e:
-            print(f"Download error: {str(e)}, Traceback: {str(sys.exc_info()[2])}")
+            print(f"Download error: {str(e)}, Traceback: {str(sys.exc_info()[2])}", file=sys.stderr)
             return jsonify({'error': str(e)}), 500
-    print("Max retries reached, giving up")
+    print("Max retries reached, giving up", file=sys.stderr)
     return jsonify({'error': 'Max retries reached, please try again later'}), 429
 
 if __name__ == '__main__':
-    print("Starting app in debug mode")
-    app.run(debug=True)
+    print("Starting app in debug mode", file=sys.stderr)
+    app.run(debug=True, use_reloader=False)
