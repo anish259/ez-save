@@ -38,7 +38,8 @@ def get_formats():
     print(f"Cleaned URL: {url}")
     
     try:
-        yt = YouTube(url)
+        # Use use_po_token=True to avoid bot detection
+        yt = YouTube(url, use_po_token=True)
         formats = []
         seen_resolutions = set()  # To deduplicate by resolution
         
@@ -84,7 +85,8 @@ def download():
     url = clean_youtube_url(url)
     
     try:
-        yt = YouTube(url)
+        # Use use_po_token=True to avoid bot detection
+        yt = YouTube(url, use_po_token=True)
         stream = yt.streams.get_by_itag(int(itag))
         print(f"Selected stream: itag={itag}, type={download_type}, includes_audio={stream.includes_audio_track}")
 
@@ -205,7 +207,6 @@ def download():
             )
         
         else:
-            # Use streaming for progressive formats to show download immediately
             def generate():
                 for chunk in pytube_request.stream(stream.url):
                     yield chunk
