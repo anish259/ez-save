@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EZ Save - YouTube Downloader</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <style>
+        /* Basic inline CSS for loading indicator */
+        #loading {
+            display: none;
+            color: #333;
+            font-style: italic;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>EZ Save</h1>
+        <p>Paste a YouTube video link and download in any format!</p>
+        
+        <form id="url-form">
+            <input type="text" id="url" placeholder="Enter YouTube URL" required>
+            <button type="submit">Get Formats</button>
+        </form>
+        
+        <div id="video-info" style="display: none;">
+            <h2 id="video-title"></h2>
+            <ul id="formats-list"></ul>
+            <button id="download-btn" style="display: none; margin-top: 10px;" onclick="startDownload()">Download Selected</button>
+            <div id="loading" style="display:none;">Processing...</div>
+        </div>
+        
+        <div id="error" style="color: red;"></div>
+    </div>
+    
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+    <script>
+        // Add this script to handle the download with loading indicator
+        let selectedItag = null;
+
+        document.getElementById('formats-list').addEventListener('click', (e) => {
+            if (e.target.tagName === 'BUTTON') {
+                selectedItag = e.target.getAttribute('data-itag');
+                document.getElementById('download-btn').style.display = 'block';
+            }
+        });
+
+        function startDownload() {
+            if (!selectedItag) {
+                alert('Please select a format first!');
+                return;
+            }
+
+            const url = document.getElementById('url').value;
+            const loading = document.getElementById('loading');
+            loading.style.display = 'block'; // Show loading indicator
+
+            fetch('/download', {
+                method: 'POST',
+                body: new URLSearchParams({
+                    url: url,
+                    itag: selectedItag,
+                    type: 'video' // Assuming video for now; adjust if audio is an option
+                })
+            })
+            .then(response => {
+                if (!response.ok) throw new Error('Download failed');
+                return response.blob();
+            })
+            .then(blob => {
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `video_${selectedItag}.mp4`; // Dynamic filename based on itag
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+            })
+            .catch(error => {
+                document.getElementById('error').textContent = error.message;
+            })
+            .finally(() => {
+                loading.style.display = 'none'; // Hide loading indicator
+            });
+        }
+    </script>
+</body>
+</html>
