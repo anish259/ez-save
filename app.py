@@ -1,12 +1,12 @@
 from flask import Flask, render_template, request, jsonify, Response
 from pytubefix import YouTube, request as pytube_request
-import time
 import os
 import tempfile
 import subprocess
 import pytubefix.exceptions as pytube_exceptions
 import urllib.error
 from urllib.parse import urlparse, parse_qs
+import time
 import threading
 
 app = Flask(__name__)
@@ -216,9 +216,9 @@ def download():
             mimetype='video/mp4',
             headers={'Content-Disposition': f'attachment; filename="{filename}"'}
         )
-except Exception as e:
-    print(f"Download error: {str(e)}")
-    return jsonify({'error': str(e)}), 500
+    except Exception as e:
+        print(f"Download error: {str(e)}")
+        return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
     app.run(debug=True)
