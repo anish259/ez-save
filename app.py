@@ -8,6 +8,7 @@ import urllib.error
 from urllib.parse import urlparse, parse_qs
 import time
 import threading
+import sys
 
 app = Flask(__name__)
 
@@ -25,6 +26,7 @@ def clean_youtube_url(url):
 
 @app.route('/')
 def index():
+    print("Serving index.html")
     return render_template('index.html')
 
 @app.route('/get_formats', methods=['POST'])
@@ -43,38 +45,42 @@ def get_formats():
         try:
             print(f"Attempt {attempt + 1} to fetch YouTube data")
             yt = YouTube(url, use_po_token=True)
-            time.sleep(5)  # 5-second delay to avoid rate limiting
             print("YouTube object created successfully")
+            time.sleep(5)  # 5-second delay to avoid rate limiting
             
-            formats = []
-            seen_resolutions = set()
-            
-            video_streams = yt.streams.filter(file_extension='mp4').order_by('resolution').desc()
-            print(f"Found {len(video_streams)} video streams")
-            for stream in video_streams:
-                if stream.includes_video_track and stream.resolution and stream.resolution not in seen_resolutions:
+            try:
+                formats = []
+                seen_resolutions = set()
+                
+                video_streams = yt.streams.filter(file_extension='mp4').order_by('resolution').desc()
+                print(f"Found {len(video_streams)} video streams")
+                for stream in video_streams:
+                    if stream.includes_video_track and stream.resolution and stream.resolution not in seen_resolutions:
+                        formats.append({
+                            'itag': stream.itag,
+                            'type': 'video',
+                            'resolution': stream.resolution,
+                            'fps': stream.fps if stream.fps else 'N/A',
+                            'size': f"{stream.filesize / (1024 * 1024):.2f} MB" if stream.filesize else "Unknown"
+                        })
+                        seen_resolutions.add(stream.resolution)
+                
+                audio_streams = yt.streams.filter(only_audio=True).order_by('abr').desc()
+                print(f"Found {len(audio_streams)} audio streams")
+                for stream in audio_streams:
                     formats.append({
                         'itag': stream.itag,
-                        'type': 'video',
-                        'resolution': stream.resolution,
-                        'fps': stream.fps if stream.fps else 'N/A',
+                        'type': 'audio',
+                        'resolution': f"MP3 {stream.abr}kbps" if stream.abr else 'MP3 Audio',
+                        'fps': 'N/A',
                         'size': f"{stream.filesize / (1024 * 1024):.2f} MB" if stream.filesize else "Unknown"
                     })
-                    seen_resolutions.add(stream.resolution)
-            
-            audio_streams = yt.streams.filter(only_audio=True).order_by('abr').desc()
-            print(f"Found {len(audio_streams)} audio streams")
-            for stream in audio_streams:
-                formats.append({
-                    'itag': stream.itag,
-                    'type': 'audio',
-                    'resolution': f"MP3 {stream.abr}kbps" if stream.abr else 'MP3 Audio',
-                    'fps': 'N/A',
-                    'size': f"{stream.filesize / (1024 * 1024):.2f} MB" if stream.filesize else "Unknown"
-                })
-            
-            print(f"Returning formats: {formats}")
-            return jsonify({'title': yt.title, 'formats': formats})
+                
+                print(f"Returning formats: {formats}")
+                return jsonify({'title': yt.title, 'formats': formats})
+            except Exception as stream_error:
+                print(f"Error processing streams: {str(stream_error)}")
+                raise
         except urllib.error.HTTPError as e:
             if e.code == 429 and attempt < max_retries - 1:
                 print(f"Rate limit hit (429) on attempt {attempt + 1}. Retrying in 10 seconds...")
@@ -86,7 +92,7 @@ def get_formats():
             print(f"pytube Error in get_formats: {str(e)}")
             return jsonify({'error': f'Failed to fetch video: {str(e)}'}), 400
         except Exception as e:
-            print(f"Unexpected error in get_formats: {str(e)}")
+            print(f"Unexpected error in get_formats: {str(e)}, Traceback: {str(sys.exc_info()[2])}")
             return jsonify({'error': str(e)}), 500
     print("Max retries reached, giving up")
     return jsonify({'error': 'Max retries reached, please try again later'}), 429
@@ -110,6 +116,7 @@ def download():
         try:
             print(f"Attempt {attempt + 1} to download")
             yt = YouTube(url, use_po_token=True)
+            print("YouTube object created successfully")
             time.sleep(5)  # 5-second delay to avoid rate limiting
             stream = yt.streams.get_by_itag(int(itag))
             print(f"Stream selected: itag={itag}, includes_audio={stream.includes_audio_track}")
@@ -248,10 +255,11 @@ def download():
             print(f"HTTP Error in download: {str(e)}")
             return jsonify({'error': f'Failed to download video: {str(e)}'}), 400
         except Exception as e:
-            print(f"Download error: {str(e)}")
+            print(f"Download error: {str(e)}, Traceback: {str(sys.exc_info()[2])}")
             return jsonify({'error': str(e)}), 500
     print("Max retries reached, giving up")
     return jsonify({'error': 'Max retries reached, please try again later'}), 429
 
 if __name__ == '__main__':
+    print("Starting app in debug mode")
     app.run(debug=True)
