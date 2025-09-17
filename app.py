@@ -1,12 +1,12 @@
 from flask import Flask, render_template, request, jsonify, Response
 from pytubefix import YouTube, request as pytube_request
+import time
 import os
 import tempfile
 import subprocess
 import pytubefix.exceptions as pytube_exceptions
 import urllib.error
 from urllib.parse import urlparse, parse_qs
-import time
 import threading
 
 app = Flask(__name__)
@@ -39,8 +39,9 @@ def get_formats():
     
     try:
         yt = YouTube(url, use_po_token=True)
+        time.sleep(2)  # Add 2-second delay to avoid rate limiting
         formats = []
-        seen_resolutions = set()  # To deduplicate by resolution
+        seen_resolutions = set()
         
         video_streams = yt.streams.filter(file_extension='mp4').order_by('resolution').desc()
         for stream in video_streams:
@@ -85,6 +86,7 @@ def download():
     
     try:
         yt = YouTube(url, use_po_token=True)
+        time.sleep(2)  # Add 2-second delay to avoid rate limiting
         stream = yt.streams.get_by_itag(int(itag))
         print(f"Selected stream: itag={itag}, type={download_type}, includes_audio={stream.includes_audio_track}")
 
@@ -187,37 +189,36 @@ def download():
                     proc.kill()
                     print("FFmpeg merge timed out after 600 seconds")
                     raise RuntimeError("FFmpeg merge timeout")
-            
-            def generate():
-                try:
-                    with open(output_path, 'rb') as f:
-                        while chunk := f.read(8192):
-                            yield chunk
-                finally:
-                    os.unlink(video_path)
-                    os.unlink(audio_path)
-                    os.unlink(output_path)
-            
-            return Response(
-                generate(),
-                mimetype='video/mp4',
-                headers={'Content-Disposition': f'attachment; filename="{filename}"'}
-            )
         
-        else:
-            # Use streaming for progressive formats to show download immediately
-            def generate():
-                for chunk in pytube_request.stream(stream.url):
-                    yield chunk
-            
-            return Response(
-                generate(),
-                mimetype='video/mp4',
-                headers={'Content-Disposition': f'attachment; filename="{filename}"'}
-            )
-    except Exception as e:
-        print(f"Download error: {str(e)}")
-        return jsonify({'error': str(e)}), 500
+        def generate():
+            try:
+                with open(output_path, 'rb') as f:
+                    while chunk := f.read(8192):
+                        yield chunk
+            finally:
+                os.unlink(video_path)
+                os.unlink(audio_path)
+                os.unlink(output_path)
+        
+        return Response(
+            generate(),
+            mimetype='video/mp4',
+            headers={'Content-Disposition': f'attachment; filename="{filename}"'}
+        )
+    
+    else:
+        def generate():
+            for chunk in pytube_request.stream(stream.url):
+                yield chunk
+        
+        return Response(
+            generate(),
+            mimetype='video/mp4',
+            headers={'Content-Disposition': f'attachment; filename="{filename}"'}
+        )
+except Exception as e:
+    print(f"Download error: {str(e)}")
+    return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
     app.run(debug=True)
